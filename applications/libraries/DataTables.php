@@ -9,7 +9,7 @@
 class DataTables
 {
 
-    private static $VALID_MATCH_TYPES = array('before', 'after', 'both', 'none');
+    private static $VALID_MATCH_TYPES = ['before', 'after', 'both', 'none'];
 
     private $model;
 
@@ -22,7 +22,7 @@ class DataTables
     private $preResultFunc = false;
 
     // assoc. array.  key is column name being passed from the DataTables data property and value is before, after, both, none
-    private $matchType = array();
+    private $matchType = [];
 
     private $protectIdentifiers = false;
     private $table;
@@ -35,13 +35,13 @@ class DataTables
      */
     public function __construct()
     {
-        $this->ci    =& get_instance();
+        $this->ci =& get_instance();
         $this->input = $this->ci->input;
     }
 
     public function init($table, $primary_column = null)
     {
-        $this->table          = $table;
+        $this->table = $table;
         $this->primary_column = $primary_column;
     }
 
@@ -104,7 +104,7 @@ class DataTables
                     self::$VALID_MATCH_TYPES));
         }
 
-        $this->matchType[$col] = $type;
+        $this->matchType[ $col ] = $type;
 
 
         return $this;
@@ -121,25 +121,25 @@ class DataTables
      *                Value format: percent, currency, date, boolean
      *
      */
-    public function make($formats = array(), $debug = false)
+    public function make($formats = [], $debug = false)
     {
 
         $start = (int)$this->input->post_get('start');
         $limit = (int)$this->input->post_get('length');
 
 
-        $output_array                    = array();
-        $output_array['start']           = $start;
-        $output_array['limit']           = $limit;
-        $output_array['draw']            = (int)$this->input->post_get('draw');
-        $output_array['recordsTotal']    = 0;
+        $output_array = [];
+        $output_array['start'] = $start;
+        $output_array['limit'] = $limit;
+        $output_array['draw'] = (int)$this->input->post_get('draw');
+        $output_array['recordsTotal'] = 0;
         $output_array['recordsFiltered'] = 0;
-        $output_array['data']            = array();
+        $output_array['data'] = [];
 
         //query the data for the records being returned
-        $selectArray    = array();
-        $customCols     = array();
-        $columnIdxArray = array();
+        $selectArray = [];
+        $customCols = [];
+        $columnIdxArray = [];
 
         foreach ($this->input->post_get('columns') as $c) {
             $columnIdxArray[] = $c['data'];
@@ -163,11 +163,11 @@ class DataTables
 
         foreach ($this->input->post_get('order') as $o) {
             if ($o['column'] !== '') {
-                $colName = $columnIdxArray[$o['column']];
+                $colName = $columnIdxArray[ $o['column'] ];
                 //handle custom sql expressions/subselects
                 if (substr($colName, 0, 2) === '$.') {
                     $aliasKey = substr($colName, 2);
-                    $colName  = $aliasKey;
+                    $colName = $aliasKey;
                 }
                 $this->ci->db->order_by($colName, $o['dir']);
             }
@@ -178,9 +178,9 @@ class DataTables
         $this->ci->db->limit($limit, $start);
         $query = $this->ci->db->get();
 
-        $output_array = array();
+        $output_array = [];
 
-        if ( ! $query) {
+        if (!$query) {
             $output_array['errorMessage'] = $this->ci->db->_error_message();
 
             return $output_array;
@@ -191,10 +191,10 @@ class DataTables
         }
 
         //process the results and create the JSON objects
-        $dataArray    = array();
+        $dataArray = [];
         $allColsArray = array_merge($selectArray, $customCols);
         foreach ($query->result() as $row) {
-            $colObj = array();
+            $colObj = [];
             //loop rows returned by the query
             foreach ($allColsArray as $c) {
                 if (trim($c) === '') {
@@ -208,23 +208,23 @@ class DataTables
                 if (count($propParts) > 1) {
                     //nest the objects correctly in the json if the column name includes
                     //the table alias
-                    $nestedObj = array();
-                    if (isset($colObj[$propParts[0]])) {
+                    $nestedObj = [];
+                    if (isset($colObj[ $propParts[0] ])) {
                         //check if we alraedy have a object for this alias in the array
-                        $nestedObj = $colObj[$propParts[0]];
+                        $nestedObj = $colObj[ $propParts[0] ];
                     }
 
 
-                    $nestedObj[$propParts[1]] = $this->formatValue($formats, $prop, $row->$prop);
-                    $colObj[$propParts[0]]    = $nestedObj;
+                    $nestedObj[ $propParts[1] ] = $this->formatValue($formats, $prop, $row->$prop);
+                    $colObj[ $propParts[0] ] = $nestedObj;
                 } else {
-                    $colObj[$c] = $this->formatValue($formats, $prop, $row->$prop);
+                    $colObj[ $c ] = $this->formatValue($formats, $prop, $row->$prop);
                 }
             }
 
             if ($this->primary_column !== null) {
-                $tmpRowIdSegments   = explode('.', $this->primary_column);
-                $idCol              = trim(end($tmpRowIdSegments));
+                $tmpRowIdSegments = explode('.', $this->primary_column);
+                $idCol = trim(end($tmpRowIdSegments));
                 $colObj['DT_RowId'] = $row->$idCol;
             }
             $dataArray[] = $colObj;
@@ -235,12 +235,12 @@ class DataTables
         $totalRecords = $this->ci->db->count_all_results();
 
 
-        $output_array['start']           = $start;
-        $output_array['limit']           = $limit;
-        $output_array['draw']            = (int)$this->input->post_get('draw');
-        $output_array['recordsTotal']    = $totalRecords;
+        $output_array['start'] = $start;
+        $output_array['limit'] = $limit;
+        $output_array['draw'] = (int)$this->input->post_get('draw');
+        $output_array['recordsTotal'] = $totalRecords;
         $output_array['recordsFiltered'] = $totalRecords;
-        $output_array['data']            = $dataArray;
+        $output_array['data'] = $dataArray;
         //$jsonArry['debug'] = $whereDebug;
 
         if ($this->preResultFunc !== false) {
@@ -259,22 +259,19 @@ class DataTables
         // $this -> CI -> db-> _protect_identifiers = FALSE;
         $this->ci->db->from($this->table);
 
-        $customExpArray = is_null($this->model->appendToSelectStr()) ?
-            array() :
-            $this->model->appendToSelectStr();
 
-        $searchableColumns = array();
+        $searchableColumns = [];
         foreach ($this->input->post_get('columns') as $c) {
 
             $colName = $c['data'];
 
             if (substr($colName, 0, 2) === '$.') {
                 $aliasKey = substr($colName, 2);
-                if (empty($this->aliased_columns[$aliasKey])) {
+                if (empty($this->aliased_columns[ $aliasKey ])) {
                     throw new RuntimeException('Alias[' . $aliasKey . '] Could Not Be Found In Aliased Columns');
                 }
 
-                $colName = $this->aliased_columns[$aliasKey];
+                $colName = $this->aliased_columns[ $aliasKey ];
             }
 
             if ($c['searchable'] !== 'false') {
@@ -297,11 +294,11 @@ class DataTables
         $globSearch = $this->input->post_get('search');
         if ($globSearch['value'] !== '') {
             $gSearchVal = $globSearch['value'];
-            $sqlOr      = '';
-            $op         = '';
+            $sqlOr = '';
+            $op = '';
             foreach ($searchableColumns as $c) {
                 $sqlOr .= $op . $c . ' LIKE \'' . $this->ci->db->escape_like_str($gSearchVal) . '%\'';
-                $op    = ' OR ';
+                $op = ' OR ';
             }
 
             $this->ci->db->where('(' . $sqlOr . ')');
@@ -328,7 +325,7 @@ class DataTables
     public function getColumnSearchType($col)
     {
         //	log_message('info', 'getColumnSearchType() ' . var_export($this -> matchType, TRUE));
-        return isset($this->matchType[$col]) ? $this->matchType[$col] : 'after';
+        return isset($this->matchType[ $col ]) ? $this->matchType[ $col ] : 'after';
     }
 
 
@@ -338,14 +335,14 @@ class DataTables
 
     private function formatValue($formats, $column, $value)
     {
-        if (isset($formats[$column]) === false || trim($value) == '') {
+        if (isset($formats[ $column ]) === false || trim($value) == '') {
             return $value;
         }
 
-        switch ($formats[$column]) {
+        switch ($formats[ $column ]) {
             case 'date' :
-                $dtFormats = array('Y-m-d H:i:s', 'Y-m-d');
-                $dt        = null;
+                $dtFormats = ['Y-m-d H:i:s', 'Y-m-d'];
+                $dt = null;
                 //try to parse the date as 2 different formats
                 foreach ($dtFormats as $f) {
                     $dt = DateTime::createFromFormat($f, $value);
@@ -376,7 +373,7 @@ class DataTables
 
     public function setColumnAlias($alias, $column)
     {
-        $this->aliased_columns[$alias] = $column;
+        $this->aliased_columns[ $alias ] = $column;
 
         return $this;
     }
