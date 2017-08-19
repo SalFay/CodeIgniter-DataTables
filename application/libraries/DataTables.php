@@ -8,7 +8,6 @@
  */
 class DataTables
 {
-
 	private static $VALID_MATCH_TYPES = [ 'before', 'after', 'both', 'none' ];
 
 	/**
@@ -55,6 +54,10 @@ class DataTables
 
 	private $output_array = [];
 
+	private $columns_format = [];
+
+	private $wheres = [];
+
 
 	/**
 	 * DataTables constructor.
@@ -68,11 +71,15 @@ class DataTables
 	/**
 	 * @param string $table
 	 * @param null   $primary_column
+	 *
+	 * @return $this
 	 */
 	public function init( $table, $primary_column = null )
 	{
 		$this->table          = $table;
 		$this->primary_column = $primary_column;
+
+		return $this;
 	}
 
 
@@ -131,13 +138,12 @@ class DataTables
 	}
 
 	/**
-	 * @param array $formats
-	 * @param bool  $debug
+	 * @param bool $debug
 	 *
 	 * @return $this
-	 * @throws \RuntimeException
+	 * @internal param array $formats
 	 */
-	public function make( array $formats = [], $debug = false )
+	public function make( $debug = false )
 	{
 
 		$start = (int) $this->input->post_get( 'start' );
@@ -236,10 +242,10 @@ class DataTables
 					}
 
 
-					$nestedObj[ $propParts[1] ] = $this->formatValue( $formats, $prop, $row->$prop );
+					$nestedObj[ $propParts[1] ] = $this->formatValue( $prop, $row->$prop );
 					$colObj[ $propParts[0] ]    = $nestedObj;
 				} else {
-					$colObj[ $c ] = $this->formatValue( $formats, $prop, $row->$prop );
+					$colObj[ $c ] = $this->formatValue( $prop, $row->$prop );
 				}
 			}
 
@@ -273,6 +279,9 @@ class DataTables
 		return $this;
 	}
 
+	/**
+	 * @return $this
+	 */
 	private function sqlJoinsAndWhere()
 	{
 		$debug = '';
@@ -301,38 +310,52 @@ class DataTables
 
 			if ( $c['search']['value'] !== '' ) {
 				$searchType = $this->getColumnSearchType( $colName );
-				//log_message('info', 'colname[' . $colName . '] searchtype[' . $searchType . ']');
-				//handle custom sql expressions/subselects
 
-				$debug .= 'col[' . $c['data'] . '] value[' . $c['search']['value'] . '] ' . PHP_EOL;
-				//	log_message('info', 'colname[' . $colName . '] searchtype[' . $searchType . ']');
 				$this->ci->db->like( $colName, $c['search']['value'], $searchType, $this->protectIdentifiers );
 			}
 		}
 
 
 		// put together a global search if specified
-		$globSearch = $this->input->post_get( 'search' );
-		if ( $globSearch['value'] !== '' ) {
-			$gSearchVal = $globSearch['value'];
-			$sqlOr      = '';
-			$op         = '';
+		$global_search = $this->input->post_get( 'search' );
+		if ( $global_search['value'] !== '' ) {
+			$search_value = $global_search['value'];
+			$like_sql     = [];
 			foreach ( $searchableColumns as $c ) {
-				$sqlOr .= $op . $c . ' LIKE \'' . $this->ci->db->escape_like_str( $gSearchVal ) . '%\'';
-				$op    = ' OR ';
+				$searchType = $this->getColumnSearchType( $c );;
+				switch ( $searchType ) {
+					case 'before':
+						$like_sql[] = $c . " LIKE '%" . $this->ci->db->escape_like_str( $search_value ) . "'";
+						break;
+					case 'after':
+						$like_sql[] = $c . " LIKE '" . $this->ci->db->escape_like_str( $search_value ) . "%'";
+						break;
+					case 'none':
+						$like_sql[] = $c . " LIKE '" . $this->ci->db->escape_like_str( $search_value ) . "'";
+						break;
+					default:
+						$like_sql[] = $c . " LIKE '%" . $this->ci->db->escape_like_str( $search_value ) . "%'";
+						break;
+				}
 			}
 
-			$this->ci->db->where( '(' . $sqlOr . ')' );
+			$this->ci->db->where( '(' . implode( ' OR ', $like_sql ) . ')' );
+		}
+
+		// Add Custom Where
+		if ( ! empty( $this->wheres ) ) {
+			foreach ( $this->wheres as $where ) {
+				switch ( $where['type'] ) {
+					case 'where':
+						$args = $where['args'];
+						$this->ci->db->where( $args['key'], $args['value'], $args['escape'] );
+						break;
+				}
+			}
 		}
 
 
-		/*        //append a static where clause to what the user has filtered, if the model tells us to do so
-				$wArray = $this->model->whereClauseArray();
-				if (is_null($wArray) === false && is_array($wArray) === true && count($wArray) > 0) {
-					$this->ci->db->where($wArray, $this->protectIdentifiers);
-				}*/
-
-		return $debug;
+		return $this;
 	}
 
 	/**
@@ -347,46 +370,27 @@ class DataTables
 
 
 	/**
-	 * @param $formats
 	 * @param $column
 	 * @param $value
 	 *
 	 * @return string
-	 * @throws \RuntimeException
+	 * @internal param $formats
 	 */
-	private function formatValue( $formats, $column, $value )
+	private function formatValue( $column, $value )
 	{
-		if ( isset( $formats[ $column ] ) === false || trim( $value ) == '' ) {
+		if ( ! isset( $this->columns_format[ $column ] ) ) {
 			return $value;
 		}
-
-		switch ( $formats[ $column ] ) {
-			case 'date' :
-				$dtFormats = [ 'Y-m-d H:i:s', 'Y-m-d' ];
-				$dt        = null;
-				//try to parse the date as 2 different formats
-				foreach ( $dtFormats as $f ) {
-					$dt = DateTime::createFromFormat( $f, $value );
-					if ( $dt !== false ) {
-						break;
-					}
-				}
-				if ( $dt === false ) {
-					//neither pattern could parse the date
-					throw new RuntimeException( 'Could Not Parse To Date For Formatting [' . $value . ']' );
-				}
-
-				return $dt->format( 'm/d/Y' );
-			case 'percent' :
-				///$formatter = new \NumberFormatter('en_US', \NumberFormatter::PERCENT);
-				//return $formatter -> format(floatval($value) * .01);
-				return $value . '%';
-			case 'currency' :
-				return '$' . number_format( (float) $value, 2 );
-			case 'boolean' :
-				$b = filter_var( $value, FILTER_VALIDATE_BOOLEAN );
-
-				return $b ? 'Yes' : 'No';
+		$format_data = $this->columns_format[ $column ];
+		$format_args = $format_data['args'];
+		switch ( $format_data['type'] ) {
+			case 'currency':
+				$value = number_format( $value, 2 );
+				$value = $format_args['prefix'] . $value . $format_args['suffix'];
+				break;
+			case 'date':
+				$value = date( $format_args['format'], strtotime( $value ) );
+				break;
 		}
 
 		return $value;
@@ -417,6 +421,12 @@ class DataTables
 		return $this;
 	}
 
+	/**
+	 * @param $column
+	 * @param $callback
+	 *
+	 * @return $this
+	 */
 	public function editColumn( $column, $callback )
 	{
 		if ( is_object( $callback ) === false || ( $callback instanceof Closure ) === false ) {
@@ -428,21 +438,94 @@ class DataTables
 		return $this;
 	}
 
+	/**
+	 * @return array
+	 */
 	public function getOutputArray()
 	{
 		return $this->output_array;
 	}
 
+	/**
+	 * @return string
+	 */
 	public function getOutputJson()
 	{
 		return json_encode( $this->output_array );
 	}
 
+	/**
+	 *
+	 */
 	public function output()
 	{
 		$json = $this->getOutputJson();
 		$this->ci->output->set_header( 'Pragma: no-cache' );
 		$this->ci->output->set_header( 'Cache-Control: no-store, no-cache' );
 		$this->ci->output->set_content_type( 'application/json' )->set_output( $json );
+	}
+
+	/**
+	 * @param        $column
+	 * @param string $prefix
+	 * @param string $suffix
+	 *
+	 * @return $this
+	 */
+	public function formatColumnAsCurrency( $column, $prefix = '$', $suffix = '' )
+	{
+		$this->columns_format[ $column ] = [
+			'type' => 'currency',
+			'args' => [
+				'prefix' => $prefix,
+				'suffix' => $suffix,
+			],
+		];
+
+		return $this;
+	}
+
+	/**
+	 * @param        $column
+	 * @param string $format
+	 *
+	 * @return $this
+	 */
+	public function formatColumnAsDate( $column, $format = 'm/d/Y' )
+	{
+		$this->columns_format[ $column ] = [
+			'type' => 'date',
+			'args' => [
+				'format' => $format,
+			],
+		];
+
+		return $this;
+	}
+
+	/**
+	 * WHERE
+	 *
+	 * Generates the WHERE portion of the query.
+	 * Separates multiple calls with 'AND'.
+	 *
+	 * @param    mixed
+	 * @param    mixed
+	 * @param    bool
+	 *
+	 * @return    CI_DB_query_builder
+	 */
+	public function where( $key, $value = null, $escape = null )
+	{
+		$this->wheres[] = [
+			'type' => 'where',
+			'args' => [
+				'key'    => $key,
+				'value'  => $value,
+				'escape' => $escape,
+			],
+		];
+
+		return $this;
 	}
 }
