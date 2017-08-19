@@ -56,6 +56,8 @@ class DataTables
 
 	private $columns_format = [];
 
+	private $joins = [];
+
 	private $wheres = [];
 
 
@@ -288,6 +290,13 @@ class DataTables
 		// this is protected in CI 3 and can no longer be turned off. must be turned off in the config
 		// $this -> CI -> db-> _protect_identifiers = FALSE;
 		$this->ci->db->from( $this->table );
+
+		// Add Joins
+		if ( ! empty( $this->joins ) ) {
+			foreach ( $this->joins as $join ) {
+				$this->ci->db->join( $join['table'], $join['condition'], $join['type'], $join['escape'] );
+			}
+		}
 
 
 		$searchableColumns = [];
@@ -527,5 +536,15 @@ class DataTables
 		];
 
 		return $this;
+	}
+
+	public function join( $table, $cond, $type = '', $escape = null )
+	{
+		$this->joins[] = [
+			'table'     => $table,
+			'condition' => $cond,
+			'type'      => $type,
+			'escape'    => $escape,
+		];
 	}
 }
