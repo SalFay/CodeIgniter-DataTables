@@ -1,4 +1,4 @@
-Data Tables Library for CodeIgniter v1.0
+Data Tables Library for CodeIgniter v1.0 - Alpha
 -
 
 * This Library makes it very easy to Integrate Ajax based DataTables in CodeIgniter
