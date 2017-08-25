@@ -228,11 +228,7 @@ class DataTables
 				$propParts = explode( '.', $c );
 
 				$prop = trim( end( $propParts ) );
-				// Apply mutation
-				if ( isset( $this->mutators[ $prop ] ) ) {
-					$callable   = $this->mutators[ $prop ];
-					$row->$prop = $callable( $row );
-				}
+
 				//loop columns in each row that the grid has requested
 				if ( count( $propParts ) > 1 ) {
 					//nest the objects correctly in the json if the column name includes
@@ -243,11 +239,22 @@ class DataTables
 						$nestedObj = $colObj[ $propParts[0] ];
 					}
 
-
-					$nestedObj[ $propParts[1] ] = $this->formatValue( $prop, $row->$prop );
+					// Apply mutation
+					$field = $row->$prop;
+					if ( isset( $this->mutators[ $prop ] ) ) {
+						$callable                   = $this->mutators[ $prop ];
+						$field = $callable( $row );
+					}
+					$nestedObj[ $propParts[1] ] = $this->formatValue( $prop, $field );
 					$colObj[ $propParts[0] ]    = $nestedObj;
 				} else {
-					$colObj[ $c ] = $this->formatValue( $prop, $row->$prop );
+					// Apply mutation
+					$field = $row->$prop;
+					if ( isset( $this->mutators[ $prop ] ) ) {
+						$callable     = $this->mutators[ $prop ];
+						$field = $callable( $row );
+					}
+					$colObj[ $c ] = $this->formatValue( $prop, $field );
 				}
 			}
 
