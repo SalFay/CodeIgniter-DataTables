@@ -21,6 +21,10 @@ class CIDataTables
 
     private $data_output = [];
 
+    private $edit_columns = [];
+
+    private $add_columns = [];
+
     public function __construct()
     {
         $this->ci    =& get_instance();
@@ -272,6 +276,20 @@ class CIDataTables
         return $this;
     }
 
+    public function group_by( $by, $escape = NULL )
+    {
+        $this->db->group_by( $by );
+        $this->query_data[ 'group_by' ][] = [
+            'by'     => $by,
+            'escape' => $escape,
+        ];
+    }
+
+    public function edit_column( $column, $callback )
+    {
+
+    }
+
 
     /**
      * Set Paging
@@ -282,6 +300,52 @@ class CIDataTables
         $length = $this->data_input[ 'length' ];
         if ( $length != '' && $length != '-1' ) {
             $this->db->limit( $length, ( $start ) ? $start : 0 );
+        }
+    }
+
+    private function setSortOrdering()
+    {
+        foreach ( $this->data_input[ 'order' ] as $order ) {
+            $i         = $order[ 'column' ];
+            $direction = $order[ 'dir' ];
+
+            $column_name = $this->data_input[ 'columns' ][ $i ][ 'data' ];
+
+            $this->db->order_by( $column_name, $direction );
+        }
+    }
+
+    private function setFilters()
+    {
+        $likes  = [];
+        $search = $this->data_input[ 'search' ][ 'value' ];
+        if ( !empty( $search ) ) {
+            foreach ( $this->data_input[ 'columns' ] as $column ) {
+                $name = $column[ 'data' ];
+
+                if ( $column[ 'searchable' ] === 'true' && empty( $this->add_columns[ $name ] ) ) {
+                    $likes[] = $name . " LIKE '%" . $search . "%'";
+                }
+            }
+        } else {
+            /* ------------------------------------------------------
+             *      Individual Column Search
+             * ------------------------------------------------------
+             */
+            foreach ( $this->data_input[ 'columns' ] as $column ) {
+                $name       = $column[ 'data' ];
+                $searchable = $column[ 'searchable' ] === 'true';
+                $not_custom = empty( $this->add_columns[ $name ] );
+                $search     = $column[ 'search' ][ 'value' ];
+
+                if ( $searchable && $not_custom && !empty( $search ) ) {
+                    $likes[] = $name . " LIKE '%" . $search . "%'";
+                }
+            }
+        }
+
+        if ( !empty( $likes ) ) {
+            $this->db->where( '(' . implode( ' OR ', $likes ) . ')' );
         }
     }
 }
