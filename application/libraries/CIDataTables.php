@@ -205,7 +205,7 @@ class CIDataTables
         return $this;
     }
 
-    public function or_like( $field, $match = '', $side = 'both', $escape = NULL )
+    public function orLike( $field, $match = '', $side = 'both', $escape = NULL )
     {
         $this->query_data[ 'where' ][] = [
             'type'   => 'or_like',
@@ -217,7 +217,7 @@ class CIDataTables
         return $this;
     }
 
-    public function not_like( $field, $match = '', $side = 'both', $escape = NULL )
+    public function notLike( $field, $match = '', $side = 'both', $escape = NULL )
     {
         $this->query_data[ 'where' ][] = [
             'type'   => 'not_like',
@@ -229,7 +229,7 @@ class CIDataTables
         return $this;
     }
 
-    public function or_not_like( $field, $match = '', $side = 'both', $escape = NULL )
+    public function orNotLike( $field, $match = '', $side = 'both', $escape = NULL )
     {
         $this->query_data[ 'where' ][] = [
             'type'   => 'or_not_like',
@@ -241,7 +241,29 @@ class CIDataTables
         return $this;
     }
 
-    public function group_start( $not = '', $type = 'AND ' )
+    public function having( $key, $value = NULL, $escape = NULL )
+    {
+        $this->query_data[ 'where' ][] = [
+            'type'   => 'having',
+            'key'    => $key,
+            'value'  => $value,
+            'escape' => $escape,
+        ];
+        return $this;
+    }
+
+    public function orHaving( $key, $value = NULL, $escape = NULL )
+    {
+        $this->query_data[ 'where' ][] = [
+            'type'   => 'or_having',
+            'key'    => $key,
+            'value'  => $value,
+            'escape' => $escape,
+        ];
+        return $this;
+    }
+
+    public function groupStart( $not = '', $type = 'AND ' )
     {
         $this->query_data[ 'where' ][] = [
             'type'      => 'group_start',
@@ -251,7 +273,7 @@ class CIDataTables
         return $this;
     }
 
-    public function not_group_start()
+    public function notGroupStart()
     {
         $this->query_data[ 'where' ][] = [
             'type' => 'not_group_start',
@@ -259,7 +281,7 @@ class CIDataTables
         return $this;
     }
 
-    public function or_group_start()
+    public function orGroupStart()
     {
         $this->query_data[ 'where' ][] = [
             'type' => 'or_group_start',
@@ -267,7 +289,7 @@ class CIDataTables
         return $this;
     }
 
-    public function or_not_group_start()
+    public function orNotGroupStart()
     {
         $this->query_data[ 'where' ][] = [
             'type' => 'or_not_group_start',
@@ -276,18 +298,37 @@ class CIDataTables
         return $this;
     }
 
-    public function group_by( $by, $escape = NULL )
+    public function groupBy( $by, $escape = NULL )
     {
-        $this->db->group_by( $by );
         $this->query_data[ 'group_by' ][] = [
             'by'     => $by,
             'escape' => $escape,
         ];
+        return $this;
     }
 
-    public function edit_column( $column, $callback )
+    /**
+     * @param $column
+     * @param $callback
+     *
+     * @return $this
+     */
+    public function editColumn( $column, $callback )
     {
+        $this->edit_columns[ $column ] = $callback;
+        return $this;
+    }
 
+    /**
+     * @param $column
+     * @param $callback
+     *
+     * @return $this
+     */
+    public function addColumn( $column, $callback )
+    {
+        $this->add_columns[ $column ] = $callback;
+        return $this;
     }
 
 
@@ -347,5 +388,98 @@ class CIDataTables
         if ( !empty( $likes ) ) {
             $this->db->where( '(' . implode( ' OR ', $likes ) . ')' );
         }
+    }
+
+    private function getResult()
+    {
+        return $this->db->get( $this->query_data[ 'from' ] );
+    }
+
+    /**
+     * Get result count
+     *
+     * @param bool $filtering
+     *
+     * @return integer
+     */
+    private function buldQuery( $filtering = FALSE )
+    {
+        if ( $filtering ) {
+            $this->setFilters();
+        }
+
+        // Set Select
+        if ( !empty( $this->query_data[ 'select' ] ) ) {
+            foreach ( $this->query_data[ 'select' ] as $select ) {
+                $this->db->select( $select[ 'select' ], $select[ 'escape' ] );
+            }
+        }
+
+        // set From
+        $this->db->from( $this->query_data[ 'from' ] );
+
+        // Set Joins
+        foreach ( $this->query_data[ 'join' ] as $join ) {
+            $this->db->join( $join[ 'table' ], $join[ 'condition' ], $join[ 'type' ], $join[ 'escape' ] );
+        }
+
+        // Set Where, Like and Having Clause
+        foreach ( $this->query_data[ 'where' ] as $clause ) {
+            switch ( $clause[ 'type' ] ) {
+                case 'where':
+                    $this->db->where( $clause[ 'key' ], $clause[ 'value' ], $clause[ 'escape' ] );
+                    break;
+                case 'or_where':
+                    $this->db->or_where( $clause[ 'key' ], $clause[ 'value' ], $clause[ 'escape' ] );
+                    break;
+                case 'where_in':
+                    $this->db->where_in( $clause[ 'key' ], $clause[ 'value' ], $clause[ 'escape' ] );
+                    break;
+                case 'or_where_in':
+                    $this->db->or_where_in( $clause[ 'key' ], $clause[ 'value' ], $clause[ 'escape' ] );
+                    break;
+                case 'where_not_in':
+                    $this->db->where_not_in( $clause[ 'key' ], $clause[ 'value' ], $clause[ 'escape' ] );
+                    break;
+                case 'or_where_not_in':
+                    $this->db->or_where_not_in( $clause[ 'key' ], $clause[ 'value' ], $clause[ 'escape' ] );
+                    break;
+                case 'like':
+                    $this->db->like( $clause[ 'field' ], $clause[ 'match' ], $clause[ 'side' ], $clause[ 'escape' ] );
+                    break;
+                case 'or_like':
+                    $this->db->or_like( $clause[ 'field' ], $clause[ 'match' ], $clause[ 'side' ], $clause[ 'escape' ] );
+                    break;
+                case 'not_like':
+                    $this->db->not_like( $clause[ 'field' ], $clause[ 'match' ], $clause[ 'side' ], $clause[ 'escape' ] );
+                    break;
+                case 'or_not_like':
+                    $this->db->or_not_like( $clause[ 'field' ], $clause[ 'match' ], $clause[ 'side' ], $clause[ 'escape' ] );
+                    break;
+                case 'having':
+                    $this->db->having( $clause[ 'key' ], $clause[ 'value' ], $clause[ 'escape' ] );
+                    break;
+                case 'or_having':
+                    $this->db->or_having( $clause[ 'key' ], $clause[ 'value' ], $clause[ 'escape' ] );
+                    break;
+                case 'group_start':
+                    $this->db->group_start( $clause[ 'not' ], $clause[ 'condition' ] );
+                    break;
+                case 'not_group_start':
+                    $this->db->not_group_start();
+                    break;
+                case 'or_group_start':
+                    $this->db->or_group_start();
+                    break;
+                case 'or_not_group_start':
+                    $this->db->or_not_group_start();
+                    break;
+                default:
+                    break;
+            }
+        }
+
+        $query = $this->getResult();
+        return $query->num_rows();
     }
 }
