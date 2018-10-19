@@ -13,8 +13,6 @@ class CIDataTables
 
     private $db;
 
-    private $input;
-
     private $query_data = [];
 
     private $data_input = [];
@@ -27,15 +25,14 @@ class CIDataTables
 
     public function __construct()
     {
-        $this->ci    =& get_instance();
-        $this->db    = $this->ci->db;
-        $this->input = $this->ci->input;
+        $this->ci =& get_instance();
+        $this->db = $this->ci->db;
 
-        $this->data_input[ 'columns' ] = $this->input->post( 'columns' );
-        $this->data_input[ 'order' ]   = $this->input->post( 'order' );
-        $this->data_input[ 'start' ]   = $this->input->post( 'start' );
-        $this->data_input[ 'length' ]  = $this->input->post( 'length' );
-        $this->data_input[ 'search' ]  = $this->input->post( 'search' );
+        $this->data_input[ 'columns' ] = $this->ci->input->post( 'columns' );
+        $this->data_input[ 'order' ]   = $this->ci->input->post( 'order' );
+        $this->data_input[ 'start' ]   = $this->ci->input->post( 'start' );
+        $this->data_input[ 'length' ]  = $this->ci->input->post( 'length' );
+        $this->data_input[ 'search' ]  = $this->ci->input->post( 'search' );
 
         $this->data_output[ 'input' ] = $this->data_input;
     }
@@ -392,7 +389,9 @@ class CIDataTables
 
     private function getResult()
     {
-        return $this->db->get( $this->query_data[ 'from' ] );
+        $result = $this->db->get( $this->query_data[ 'from' ] );
+        $this->logQuery();
+        return $result;
     }
 
     /**
@@ -402,12 +401,19 @@ class CIDataTables
      *
      * @return integer
      */
-    private function buldQuery( $filtering = FALSE )
+    private function setTotals( $filtering = TRUE )
     {
         if ( $filtering ) {
             $this->setFilters();
         }
+        $this->setCustomClauses();
 
+        $query = $this->getResult();
+        return $query->num_rows();
+    }
+
+    private function setCustomClauses()
+    {
         // Set Select
         if ( !empty( $this->query_data[ 'select' ] ) ) {
             foreach ( $this->query_data[ 'select' ] as $select ) {
@@ -479,7 +485,59 @@ class CIDataTables
             }
         }
 
-        $query = $this->getResult();
-        return $query->num_rows();
+        if ( !empty( $this->query_data[ 'group_by' ] ) ) {
+            foreach ( $this->query_data[ 'group_by' ] as $group ) {
+                $this->db->order_by( $group[ 'by' ], $group[ 'escape' ] );
+            }
+        }
+        return $this;
+    }
+
+    private function mutateQueryResult()
+    {
+        $output_array = [];
+
+        $result = $this->getResult()->result();
+
+        foreach ( $result as $index => $row ) {
+            $output_array[ $index ] = $row;
+
+            foreach ( $this->add_columns as $key => $function ) {
+                $output_array[ $index ]->{$key} = call_user_func( $function, $row );
+            }
+
+            foreach ( $this->edit_columns as $key => $function ) {
+                $output_array[ $index ]->{$key} = call_user_func( $function, $row );
+            }
+        }
+
+        $this->data_output[ 'data' ] = $output_array;
+
+
+        return $this;
+
+    }// mutateQueryResult()
+
+    /**
+     * Builds all the necessary query segments and performs the main query based on results set from chained statements
+     *
+     * @param string $output
+     * @param string $charset
+     *
+     * @return string
+     */
+    public function make( $output = 'json', $charset = 'UTF-8' )
+    {
+        $this->setPaging();
+        $this->setSortOrdering();
+        $this->setFilters();
+        $this->setCustomClauses();
+        $this->setTotals();
+        $this->mutateQueryResult();
+    }
+
+    private function logQuery()
+    {
+        $this->data_output[ 'query' ][] = $this->db->last_query();
     }
 }
